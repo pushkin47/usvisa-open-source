@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>US Visa Monitor</title>
+    <script>
+      document.documentElement.dataset.theme = localStorage.getItem("usvisa-theme") || "light";
+    </script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260806c" />
+  </head>
+  <body>
+    <section id="authView" class="auth-shell" hidden>
+      <form id="authForm" class="auth-card">
+        <p class="eyebrow">US Visa Monitor</p>
+        <h1 id="authTitle">Вход</h1>
+        <p class="muted">Войдите в личный кабинет или создайте аккаунт для хранения данных записи.</p>
+        <label>
+          <span>Email</span>
+          <input id="authEmail" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          <span>Пароль</span>
+          <input id="authPassword" type="password" autocomplete="current-password" minlength="8" required />
+        </label>
+        <section id="termsSection" class="terms-card" hidden>
+          <label class="terms-checkbox">
+            <input id="termsAccepted" type="checkbox" />
+            <span>Я ознакомлен(а) и согласен(на) с <button id="openTermsBtn" class="inline-link-button" type="button">правилами использования сервиса</button></span>
+          </label>
+        </section>
+        <p id="authStatus" class="auth-status"></p>
+        <button id="authSubmitBtn" class="primary-button" type="submit">Войти</button>
+        <button id="demoAccessBtn" class="secondary-button" type="button">Демо доступ</button>
+        <button id="authModeBtn" class="secondary-button" type="button">Создать аккаунт</button>
+      </form>
+      <footer class="page-footer auth-footer">
+        <button id="authOpenOnboardingBtn" class="footer-link-button" type="button">Инструкция</button>
+        <button id="authOpenTermsBtn" class="footer-link-button" type="button">Пользовательское соглашение</button>
+      </footer>
+    </section>
+
+    <div id="appView" hidden>
+    <header class="topbar">
+      <div>
+        <h1>US Visa Monitor</h1>
+        <p id="userBadge" class="muted"></p>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="icon-button" title="Обновить данные" type="button">↻</button>
+        <label class="header-range-select">
+          <select id="rangeHours">
+            <option value="1" selected>Последний час</option>
+            <option value="12">Последние 12 часов</option>
+            <option value="24">Последние 24 часа</option>
+            <option value="168">Последние 7 дней</option>
+            <option value="all">Все время</option>
+          </select>
+        </label>
+        <button id="monitorToggleBtn" class="secondary-button admin-only" type="button">Старт 24/7</button>
+        <button id="runLoginBtn" class="secondary-button admin-only" type="button">Открыть логин</button>
+        <button id="runCheckBtn" class="primary-button admin-only" type="button">Запустить проверку</button>
+        <button id="themeToggleBtn" class="secondary-button" type="button">Тёмная тема</button>
+        <button id="logoutBtn" class="secondary-button" type="button">Выйти</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="tabs" aria-label="Разделы">
+        <button class="tab active" data-tab="results" type="button">Результаты</button>
+        <button class="tab logs-observer-only" data-tab="logs" type="button">Логи запуска</button>
+        <button class="tab account-only" data-tab="ignore" type="button">Игнор-лист</button>
+        <button class="tab admin-only" data-tab="settings" type="button">Настройки</button>
+        <button class="tab admin-only" data-tab="users" type="button">Пользователи</button>
+        <button class="tab account-only" data-tab="profile" type="button">Личный кабинет</button>
+        <button class="tab" data-tab="instruction" type="button">Инструкция</button>
+        <button class="tab" data-tab="summary" type="button">Сводка</button>
+        <button class="tab admin-observer-only" data-tab="errors" type="button">Ошибки</button>
+        <button class="tab admin-observer-only" data-tab="debug" type="button">Отладка</button>
+        <button class="tab admin-only" data-tab="cities" type="button">Астана</button>
+      </section>
+
+      <section id="summaryPanel" class="panel" aria-label="Сводка">
+        <section class="summary-intro">
+          <h2>Сводка мониторинга</h2>
+          <p class="muted">Статистика считается по истории реальных проверок</p>
+        </section>
+
+        <section class="status-grid" aria-label="Текущее состояние">
+          <article>
+            <span class="metric-label">Проверок без ошибок</span>
+            <strong id="successfulChecks">0</strong>
+          </article>
+          <article>
+            <span class="metric-label">Ошибок с токеном</span>
+            <strong id="tokenErrors">0</strong>
+          </article>
+          <article>
+            <span class="metric-label">Браузер/timeout ошибок</span>
+            <strong id="browserErrors">0</strong>
+          </article>
+          <article>
+            <span class="metric-label">Найдено слотов</span>
+            <strong id="foundFreeDays">0</strong>
+          </article>
+          <article>
+            <span class="metric-label">Актуальных слотов</span>
+            <strong id="actualFreeDays">0</strong>
+          </article>
+          <article>
+            <span class="metric-label">До ближайшей проверки</span>
+            <strong id="nextCheck">-</strong>
+          </article>
+        </section>
+      </section>
+
+      <section id="resultsPanel" class="panel active" aria-label="Результаты">
+        <div class="results-hero">
+          <article>
+            <h2>Актуальные слоты для записи</h2>
+            <div id="activeWindowDays" class="day-list"></div>
+          </article>
+          <article class="next-check-card">
+            <span class="metric-label">Ближайшая проверка</span>
+            <strong id="nextCheckAtAbsolute">-</strong>
+          </article>
+        </div>
+        <div class="last-check-grid results-secondary-grid">
+          <article>
+            <h3>Что увидел монитор</h3>
+            <div id="datesDebugSnapshot" class="list-block"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="errorsPanel" class="panel admin-observer-only" aria-label="Ошибки">
+        <div class="section-head">
+          <div>
+            <h2>Ошибки в очереди дайджеста</h2>
+            <p id="errorsSummary" class="muted">Последние ошибки мониторинга, которые еще не ушли в сводку.</p>
+          </div>
+          <div class="actions">
+            <button id="clearErrorsBtn" class="secondary-button" type="button" hidden>Очистить ошибки</button>
+          </div>
+        </div>
+        <div id="errorsBlock" class="errors"></div>
+      </section>
+
+      <section id="debugPanel" class="panel admin-observer-only" aria-label="Отладка">
+        <div class="section-head">
+          <div>
+            <h2>Артефакты браузерной отладки</h2>
+            <p id="debugSummary" class="muted">Скриншоты, HTML и сопутствующая диагностика последних неудачных логинов.</p>
+          </div>
+          <div class="actions">
+            <button id="clearDebugArtifactsBtn" class="secondary-button" type="button" hidden>Удалить все артефакты</button>
+          </div>
+        </div>
+        <div id="debugArtifacts" class="debug-grid"></div>
+      </section>
+
+      <section id="ignorePanel" class="panel" aria-label="Игнор-лист">
+        <div class="ignore-layout">
+          <article>
+            <h2>Игнорируемые периоды</h2>
+            <p class="muted">Эти периоды монитор будет пропускать</p>
+            <form id="ignorePeriodForm" class="period-form">
+              <label>
+                <span>Добавить период с</span>
+                <input id="ignorePeriodStart" type="date" />
+              </label>
+              <label>
+                <span>По</span>
+                <input id="ignorePeriodEnd" type="date" />
+              </label>
+              <button id="ignorePeriodSubmitBtn" class="secondary-button" type="submit">Добавить период</button>
+            </form>
+            <div id="ignoredDateList" class="date-chip-list"></div>
+            <p id="ignoreStatus" class="muted"></p>
+            <label class="stacked-field">
+              <span>Не записывать раньше чем через, дней</span>
+              <input id="ignorePreparationDays" type="number" min="1" step="1" />
+            </label>
+            <p id="ignorePreparationHint" class="muted"></p>
+          </article>
+
+          <article>
+            <h2>Приоритетные периоды</h2>
+            <p class="muted">Если найден слот внутри одного из этих периодов, можно пробовать автозапись</p>
+            <form id="priorityPeriodForm" class="period-form">
+              <label>
+                <span>Добавить период с</span>
+                <input id="priorityPeriodStart" type="date" />
+              </label>
+              <label>
+                <span>По</span>
+                <input id="priorityPeriodEnd" type="date" />
+              </label>
+              <button id="priorityPeriodSubmitBtn" class="secondary-button" type="submit">Добавить период</button>
+            </form>
+            <div id="priorityDateList" class="date-chip-list"></div>
+            <p id="priorityStatus" class="muted"></p>
+          </article>
+        </div>
+      </section>
+
+      <section id="profilePanel" class="panel" aria-label="Личный кабинет">
+        <form id="profileForm" class="profile-form">
+          <article>
+            <h2>Данные записи</h2>
+            <div class="fields">
+              <label class="field-card">
+                <span class="field-label">Логин от сайта посольства</span>
+                <input id="embassyLogin" type="email" autocomplete="off" />
+              </label>
+              <label class="field-card">
+                <span class="field-label">Пароль от сайта посольства</span>
+                <input id="embassyPassword" type="password" autocomplete="off" />
+              </label>
+              <label class="field-card">
+                <span class="field-label">Город собеседования</span>
+                <select id="profileCity"></select>
+              </label>
+            </div>
+          </article>
+          <div class="save-row">
+            <span id="profileStatus" class="muted"></span>
+            <button class="primary-button" type="submit">Сохранить личный кабинет</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="instructionPanel" class="panel" aria-label="Инструкция">
+        <article class="terms-dialog-card">
+          <div class="section-head">
+            <div>
+              <h2>Как пользоваться сервисом</h2>
+            </div>
+            <div class="actions">
+              <button id="instructionStartTourBtn" class="secondary-button" type="button">Показать тур</button>
+            </div>
+          </div>
+          <div class="terms-copy">
+            <p><strong>Перед началом работы:</strong> сначала заполните анкету DS-160, затем зарегистрируйтесь на сайте посольства <a class="footer-link" href="https://ais.usvisa-info.com" target="_blank" rel="noreferrer">ais.usvisa-info.com</a>, и только после этого вставьте логин и пароль от сайта посольства в бота в разделе «Личный кабинет». Без этих шагов сервис не сможет корректно работать с вашей записью.</p>
+            <p><strong>Результат записи.</strong> Успешная запись отображается в панели и локальном журнале. Внешние уведомления не отправляются.</p>
+            <p><strong>Результаты.</strong> Здесь отображаются найденные слоты для записи, ближайшая проверка и даты, которые монитор находил за выбранный период.</p>
+            <p><strong>Игнор-лист.</strong> Здесь можно добавлять периоды, которые монитор должен пропускать. Ниже расположен приоритетный список: если будет найден слот внутри одного из этих периодов и по нему есть свободное время, сервис сможет попытаться записать вас автоматически.</p>
+            <p><strong>Личный кабинет.</strong> Здесь нужно ввести логин и пароль от сайта посольства, выбрать город собеседования (сейчас доступна Астана) и нажать кнопку сохранения. Это обязательный шаг перед запуском мониторинга.</p>
+            <p><strong>Сводка.</strong> Здесь собрана статистика по последним проверкам: сколько раз монитор находил даты, сколько было ошибок и что происходило за выбранный период.</p>
+            <p><strong>Логика списков дат.</strong> Если дата попадает в игнор-лист, монитор её видит, но не использует для проверки времени. Если дата попадает в приоритетный список и по ней есть свободное время, сервис может попытаться записать вас именно на неё.</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="usersPanel" class="panel admin-only" aria-label="Пользователи">
+        <div class="section-head">
+          <div>
+            <h2>Пользователи</h2>
+            <p class="muted">Зарегистрированные аккаунты, выбранные города и текущий статус поиска</p>
+          </div>
+        </div>
+        <div id="usersList" class="users-list"></div>
+        <section id="userSettingsView" class="user-settings-view" hidden>
+          <div class="section-head">
+            <div>
+              <h3 id="userSettingsTitle">Настройки пользователя</h3>
+              <p id="userSettingsMeta" class="muted"></p>
+            </div>
+            <div class="actions">
+              <button id="userSettingsBackBtn" class="secondary-button" type="button">Назад</button>
+            </div>
+          </div>
+          <div class="user-settings-grid">
+            <article>
+              <h4>Посольство и сеть</h4>
+              <div class="fields">
+                <label class="field-card">
+                  <span class="field-label">Логин посольства</span>
+                  <input id="userSettingsEmbassyLogin" type="email" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Новый пароль</span>
+                  <input id="userSettingsEmbassyPassword" type="password" placeholder="не менять" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Город</span>
+                  <select id="userSettingsCity"></select>
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Proxy URL</span>
+                  <input id="userSettingsVpnProxyUrl" type="text" placeholder="http://127.0.0.1:2081" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Appointment URL</span>
+                  <input id="userSettingsAppointmentUrl" type="text" placeholder="https://ais.usvisa-info.com/.../appointment" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Dates API URL</span>
+                  <input id="userSettingsDatesApiUrl" type="text" placeholder="https://ais.usvisa-info.com/.../appointment/days/134.json?appointments[expedite]=false" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Times API URL</span>
+                  <input id="userSettingsTimesApiUrl" type="text" placeholder="https://ais.usvisa-info.com/.../appointment/times/134.json" autocomplete="off">
+                </label>
+                <label class="field-card">
+                  <span class="field-label">Дней на подготовку</span>
+                  <input id="userSettingsPreparationDays" type="number" min="1" step="1">
+                </label>
+              </div>
+            </article>
+            <article>
+              <h4>Игнор-лист</h4>
+              <div class="inline-form user-settings-period-form">
+                <input id="userSettingsIgnoreStart" type="date">
+                <input id="userSettingsIgnoreEnd" type="date">
+                <button id="userSettingsAddIgnoreBtn" class="secondary-button" type="button">Добавить</button>
+              </div>
+              <div id="userSettingsIgnoredList" class="date-list"></div>
+            </article>
+            <article>
+              <h4>Приоритетный список</h4>
+              <div class="inline-form user-settings-period-form">
+                <input id="userSettingsPriorityStart" type="date">
+                <input id="userSettingsPriorityEnd" type="date">
+                <button id="userSettingsAddPriorityBtn" class="secondary-button" type="button">Добавить</button>
+              </div>
+              <div id="userSettingsPriorityList" class="date-list"></div>
+            </article>
+          </div>
+          <div class="save-row">
+            <span id="userSettingsStatus" class="muted"></span>
+            <button id="userSettingsSaveBtn" class="primary-button" type="button">Сохранить настройки</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="citiesPanel" class="panel admin-only" aria-label="Астана">
+        <div class="section-head">
+          <div>
+            <h2>Астана</h2>
+            <p class="muted">Настройки страницы записи в Астане, ID консульства 134</p>
+          </div>
+          <div class="actions">
+          </div>
+        </div>
+        <form id="citiesForm">
+          <div id="citiesList" class="cities-list"></div>
+          <div class="save-row">
+            <span id="citiesStatus" class="muted"></span>
+            <button class="primary-button" type="submit">Сохранить настройки Астаны</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="settingsPanel" class="panel" aria-label="Настройки">
+        <form id="settingsForm">
+          <div id="settingsGroups" class="settings-groups"></div>
+          <div class="save-row">
+            <span id="saveStatus" class="muted"></span>
+            <button class="primary-button" type="submit">Сохранить настройки</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="logsPanel" class="panel" aria-label="Логи запуска">
+        <div class="section-head">
+          <div>
+            <h2>Текущий процесс</h2>
+            <p id="processState" class="muted">Нет активного запуска</p>
+            <p id="monitorDetails" class="muted"></p>
+          </div>
+          <div class="actions">
+            <label class="log-user-filter">
+              <span class="muted">Пользователь</span>
+              <select id="logUserFilter">
+                <option value="all">Все пользователи</option>
+              </select>
+            </label>
+            <label class="log-toggle">
+              <input id="logEventTimeToggle" type="checkbox" checked>
+              <span>Отображать время события</span>
+            </label>
+            <button id="copyLogsBtn" class="secondary-button" type="button">Скопировать</button>
+            <button id="resetNextCheckBtn" class="secondary-button admin-only" type="button">Сбросить время до следующей проверки</button>
+            <button id="stopProcessBtn" class="danger-button" type="button">Остановить процесс</button>
+          </div>
+        </div>
+        <pre id="logs" class="logs"></pre>
+      </section>
+    </main>
+    <footer class="page-footer app-footer">
+      <button id="openOnboardingBtn" class="footer-link-button" type="button">Инструкция</button>
+      <button id="footerOpenTermsBtn" class="footer-link-button" type="button">Пользовательское соглашение</button>
+    </footer>
+    </div>
+
+    <dialog id="termsDialog" class="terms-dialog">
+      <article class="terms-dialog-card">
+        <div class="section-head">
+          <div>
+            <h2>Правила использования сервиса</h2>
+          </div>
+          <div class="actions">
+            <button id="closeTermsBtn" class="secondary-button" type="button">Закрыть</button>
+          </div>
+        </div>
+        <div class="terms-copy">
+          <p>Сервис помогает отслеживать доступные слоты и автоматизировать часть действий при записи в посольства и визовые центры разных государств, но не является государственным, консульским, визовым, миграционным, банковским, страховым или платежным оператором и не представляет интересы каких-либо посольств, консульств, визовых центров, банков, эквайеров или иных третьих лиц.</p>
+          <p>Пользователь использует сервис добровольно и на свой риск. Сервис не гарантирует успешную запись, доступность внешних сайтов, сохранение сессий, отсутствие ограничений по IP, учетной записи, устройству, браузеру, сети, платежам, квотам, лимитам, антибот-защитам, CAPTCHA, rate limit, ручным и автоматическим проверкам, а также внутренним правилам посольств и визовых центров.</p>
+          <p>Пользователь обязуется самостоятельно соблюдать правила, ограничения, требования, инструкции и условия использования всех посольств, визовых центров, платежных агентов, банков, операторов связи и иных сторонних систем, с которыми он взаимодействует через сервис или параллельно с ним. Пользователь самостоятельно отвечает за законность своих действий и достоверность вводимых им данных на внешних площадках.</p>
+          <p>Сервис не несет ответственности за любые ограничения, блокировки, временные или постоянные запреты, отказ в доступе, отмену записи, отказ в записи, изменение доступности слотов, изменение интерфейсов, API, маршрутов, токенов, политик безопасности, региональных ограничений, мер антибот-защиты и иных технических или организационных решений на стороне посольств, визовых центров, платежных агентов или связанных с ними сервисов.</p>
+          <p>Если при использовании сервиса пользователь столкнётся с ограничением доступа, блокировкой аккаунта, запретом на запись, отменой записи, ограничением со стороны посольства, визового центра, платежного агента, сайта записи или иного внешнего сервиса, это не считается виной сервиса и не образует обязательства сервиса по восстановлению доступа, компенсации убытков или обеспечению результата.</p>
+          <p>Сервис не несет ответственности за любые прямые, косвенные, случайные, сопутствующие, штрафные или иные убытки и последствия, включая потерю записи, пропуск слота, недоступность сайта, блокировки, штрафы, отказы в доступе, отмены операций, технические ошибки третьих лиц, потерю времени, деловой репутации, денежных средств, а также за действия или бездействие посольств, визовых центров, банков, эквайеров, платежных агентов, операторов связи, облачных и инфраструктурных провайдеров.</p>
+          <p>Сервис предоставляется по принципу «как есть» и «по мере доступности». Мы не гарантируем бесперебойную работу, совместимость с любыми устройствами и сетями, постоянную доступность функций, отсутствие ошибок или соответствие сервиса индивидуальным ожиданиям пользователя. Внешние сайты могут менять правила и интерфейсы без уведомления, и это может повлиять на работу автоматизации.</p>
+          <p>Сервис не дает юридических, миграционных, консульских, финансовых, налоговых или иных профессиональных консультаций. Пользователь самостоятельно оценивает правомерность и последствия своих действий, а при необходимости обращается за консультацией к профильным специалистам.</p>
+          <p>Сервис не хранит и не обрабатывает персональные данные вроде ФИО, возраста, паспортных данных, адресов проживания, номеров документов, семейного положения, биометрии и иных анкетных сведений. Хранятся только электронная почта, зашифрованный пароль от аккаунта сервиса, а также введённые пользователем данные для входа на сайт посольства, которые используются для технической работы автоматизации.</p>
+          <p>Пользователь обязуется не использовать сервис в целях, нарушающих закон, правила внешних площадок, права третьих лиц или условия работы посольств и визовых центров. Мы вправе ограничить или прекратить доступ к сервису в случае злоупотреблений, подозрительной активности, нарушения настоящих правил или риска причинения вреда сервису, другим пользователям или третьим лицам.</p>
+          <p>Возврат оплаты возможен за исключением комиссии сервиса в размере 10% и комиссии платежного агента, банка, эквайера или иного посредника, если такая комиссия была удержана при приеме платежа, возврате или обработке операции. Срок и способ возврата зависят от правил платежного агента и обслуживающего банка.</p>
+          <p>Продолжая регистрацию и использование сервиса, пользователь подтверждает, что ознакомился с этими правилами, понимает ограничения автоматизации, принимает указанные риски и самостоятельно несет ответственность за соблюдение правил внешних площадок и последствия своих действий.</p>
+        </div>
+      </article>
+    </dialog>
+
+    <dialog id="confirmDialog" class="terms-dialog">
+      <article class="terms-dialog-card">
+        <h2 id="confirmDialogTitle">Подтвердите действие</h2>
+        <p id="confirmDialogText" class="muted"></p>
+        <div class="actions">
+          <button id="confirmDialogCancel" class="secondary-button" type="button">Отмена</button>
+          <button id="confirmDialogAccept" class="primary-button" type="button">Удалить</button>
+        </div>
+      </article>
+    </dialog>
+
+    <dialog id="onboardingDialog" class="terms-dialog">
+      <article class="terms-dialog-card">
+        <h2>Как пользоваться сервисом</h2>
+        <div class="terms-copy">
+          <p><strong>Перед началом работы:</strong> сначала заполните анкету DS-160, затем зарегистрируйтесь на сайте посольства <a class="footer-link" href="https://ais.usvisa-info.com" target="_blank" rel="noreferrer">ais.usvisa-info.com</a>, и только после этого вставьте логин и пароль от сайта посольства в бота в разделе «Личный кабинет». Без этих шагов сервис не сможет корректно работать с вашей записью.</p>
+          <p><strong>Результат записи.</strong> Успешная запись отображается в панели и локальном журнале. Внешние уведомления не отправляются.</p>
+          <p><strong>Результаты.</strong> Здесь отображаются найденные слоты для записи, ближайшая проверка и даты, которые монитор находил за выбранный период.</p>
+          <p><strong>Игнор-лист.</strong> Здесь можно добавлять периоды, которые монитор должен пропускать. Ниже расположен приоритетный список: если будет найден слот внутри одного из этих периодов и по нему есть свободное время, сервис сможет попытаться записать вас автоматически.</p>
+          <p><strong>Личный кабинет.</strong> Здесь нужно ввести логин и пароль от сайта посольства, выбрать город собеседования (сейчас доступна Астана) и нажать кнопку сохранения. Это обязательный шаг перед запуском мониторинга.</p>
+          <p><strong>Сводка.</strong> Здесь собрана статистика по последним проверкам: сколько раз монитор находил даты, сколько было ошибок и что происходило за выбранный период.</p>
+          <p><strong>Логика списков дат.</strong> Если дата попадает в игнор-лист, монитор её видит, но не использует для проверки времени. Если дата попадает в приоритетный список и по ней есть свободное время, сервис может попытаться записать вас именно на неё.</p>
+        </div>
+        <div class="actions onboarding-actions">
+          <button id="startTourBtn" class="secondary-button" type="button">Показать тур</button>
+          <button id="closeOnboardingBtn" class="primary-button" type="button">Понятно</button>
+        </div>
+      </article>
+    </dialog>
+
+    <div id="tourOverlay" class="tour-overlay" hidden>
+      <div class="tour-scrim"></div>
+      <article id="tourCard" class="tour-card" role="dialog" aria-modal="true" aria-live="polite">
+        <div class="tour-card-top">
+          <span class="tour-kicker">Быстрый тур</span>
+          <span id="tourCounter" class="tour-counter">1 / 1</span>
+        </div>
+        <h3 id="tourTitle">Раздел</h3>
+        <p id="tourText" class="muted"></p>
+        <div class="actions">
+          <button id="tourSkipBtn" class="secondary-button" type="button">Пропустить</button>
+          <button id="tourPrevBtn" class="secondary-button" type="button">Назад</button>
+          <button id="tourNextBtn" class="primary-button" type="button">Далее</button>
+        </div>
+      </article>
+    </div>
+
+    <script src="/static/app.js?v=20260806c"></script>
+  </body>
+</html>
