@@ -39,3 +39,19 @@ class PublicReleaseTests(TempProjectCaseMixin, unittest.TestCase):
         with patch.dict(os.environ, {'USVISA_FACILITY_ID': '125'}):
             self.config.load_config_to_env()
             self.assertEqual(os.environ['USVISA_FACILITY_ID'], '134')
+
+    def test_profile_booking_preferences_override_inherited_process_values(self):
+        self.web._init_db()
+        with self.web._db() as conn:
+            user_id = conn.execute("SELECT id FROM users WHERE role = 'admin'").fetchone()['id']
+            conn.execute("UPDATE user_profiles SET priority_dates = '', prep_days = 4 WHERE user_id = ?", (user_id,))
+        inherited = {'USVISA_PRIORITY_DATES': '2099-01-01', 'USVISA_PREPARATION_DAYS': '99'}
+        with patch.object(self.web, '_env_for_subprocess', return_value=inherited.copy()):
+            env = self.web._env_for_user_subprocess(user_id)
+        self.assertEqual(env['USVISA_PRIORITY_DATES'], '')
+        self.assertEqual(env['USVISA_PREPARATION_DAYS'], '4')
+        with self.web._db() as conn:
+            conn.execute("UPDATE user_profiles SET priority_dates = '2099-02-01,2099-02-02' WHERE user_id = ?", (user_id,))
+        with patch.object(self.web, '_env_for_subprocess', return_value=inherited.copy()):
+            env = self.web._env_for_user_subprocess(user_id)
+        self.assertEqual(env['USVISA_PRIORITY_DATES'], '2099-02-01,2099-02-02')

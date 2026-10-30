@@ -1531,6 +1531,9 @@ def _profile_env_values(user_id: int) -> dict[str, str]:
         "USVISA_LOGIN_PASSWORD": str(profile.get("embassyPassword") or ""),
         "USVISA_FACILITY_ID": facility_id,
         "USVISA_IGNORED_DATES": ignored_dates,
+        # An empty profile must disable booking inherited from the parent process.
+        "USVISA_PRIORITY_DATES": ",".join(profile.get("priorityDates") or []),
+        "USVISA_PREPARATION_DAYS": str(profile["preparationDays"]),
         "USVISA_PROFILE_CONFIG_ACTIVE": "true",
         "USVISA_CREDENTIAL_SOURCE": f"user_profiles.user_id:{user_id}",
         "USVISA_STATE_FILE": str(_user_state_file(user_id)),
